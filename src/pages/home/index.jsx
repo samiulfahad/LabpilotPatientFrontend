@@ -14,6 +14,7 @@
  *   underlying camera is only released after IDLE_RELEASE_MS of being closed.
  */
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { Scanner } from "@yudiel/react-qr-scanner";
 import scanService from "../../api/scan";
@@ -243,6 +244,9 @@ function ScannerModal({ visible, onScan, onClose }) {
 // ── Main component ──────────────────────────────────────────────────────
 
 export default function ScanInvoice({ onDownloadReports }) {
+  const { labId: routeLabId, invoiceId: routeInvoiceId } = useParams();
+  const navigate = useNavigate();
+
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMounted, setModalMounted] = useState(false); // keeps modal (and its camera) alive between opens
   const releaseTimer = useRef(null);
@@ -275,6 +279,16 @@ export default function ScanInvoice({ onDownloadReports }) {
   }, []);
 
   useEffect(() => () => releaseTimer.current && clearTimeout(releaseTimer.current), []);
+
+  // Printed invoice QR codes encode the direct URL /:labId/:invoiceId, so a
+  // phone's native camera app (outside this SPA) lands here instead of going
+  // through the in-app scanner. Run the same lookup automatically on mount.
+  useEffect(() => {
+    if (routeLabId && routeInvoiceId) {
+      lookup(routeLabId, routeInvoiceId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeLabId, routeInvoiceId]);
 
   // ── Lookup ────────────────────────────────────────────────────────────
   async function lookup(labId, invoiceId) {
@@ -326,6 +340,7 @@ export default function ScanInvoice({ onDownloadReports }) {
   function reset() {
     setData(null);
     setError("");
+    if (routeLabId || routeInvoiceId) navigate("/");
   }
 
   // ── Result view ──────────────────────────────────────────────────────
