@@ -1,6 +1,6 @@
 import { useState } from "react";
-import axios from "axios";
 import { Scanner } from "@yudiel/react-qr-scanner";
+import scanService from "../../api/scan";
 import {
   CameraOff,
   ScanLine,
@@ -19,11 +19,6 @@ import {
   AlertTriangle,
   Loader2,
 } from "lucide-react";
-
-// ── Config ───────────────────────────────────────────────────────────────
-// Point this at your API base — kept as a bare axios instance so the parent
-// app can swap it out (baseURL, auth headers, etc.) without editing this file.
-const api = axios.create({ baseURL: "/api" });
 
 // QR codes printed on invoices encode a URL like:
 //   https://scan.labpilotpro.com/<labId>/<invoiceId>
@@ -113,6 +108,7 @@ export default function ScanInvoice({ onDownloadReports }) {
     try {
       const res = await scanService.scan(labId, cleanInvoiceId);
       setData(res.data);
+      console.log(res.data);
     } catch (err) {
       setError(err?.response?.data?.error || "ইনভয়েস খুঁজে পাওয়া যায়নি।");
       setScanLocked(false);
