@@ -111,7 +111,7 @@ export default function ScanInvoice({ onDownloadReports }) {
 
     setLoading(true);
     try {
-      const res = await api.get(`/scan/${labId}/${cleanInvoiceId}`);
+      const res = await scanService.scan(labId, cleanInvoiceId);
       setData(res.data);
     } catch (err) {
       setError(err?.response?.data?.error || "ইনভয়েস খুঁজে পাওয়া যায়নি।");
