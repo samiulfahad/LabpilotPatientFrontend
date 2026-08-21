@@ -473,17 +473,16 @@ export default function ScanInvoice() {
             <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-4 px-1 gap-3">
               <h3 className="text-lg font-bold text-slate-900">টেস্ট রিপোর্ট সমূহ</h3>
 
-              {/* Online/Offline Counts */}
+              {/* Test Stats: Total / Online / Offline */}
               <div className="flex flex-wrap items-center gap-2 text-[12px]">
+                <div className="flex items-center gap-1.5 bg-blue-50 text-blue-700 px-2.5 py-1 rounded-md font-bold border border-blue-100/50">
+                  <span className="opacity-70">মোট:</span> {tests.length}
+                </div>
                 <div className="flex items-center gap-1.5 bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-md font-bold border border-indigo-100/50">
                   <span className="opacity-70">অনলাইন:</span> {counts.onlineCount}
                 </div>
                 <div className="flex items-center gap-1.5 bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md font-bold border border-slate-200/50">
                   <span className="opacity-70">অফলাইন:</span> {counts.offlineCount}
-                </div>
-                <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-md font-bold border border-emerald-100/50">
-                  <CheckCircle2 className="h-3 w-3" />
-                  <span className="opacity-70">প্রস্তুত:</span> {counts.onlineCompletedCount}
                 </div>
               </div>
             </div>
