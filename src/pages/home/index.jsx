@@ -19,7 +19,7 @@ import { createPortal } from "react-dom";
 import { Scanner } from "@yudiel/react-qr-scanner";
 import { pdf } from "@react-pdf/renderer";
 import scanService from "../../api/scan";
-import { ScanReportPDFDocument } from "./ScanReportPDF";
+import { ScanReportPDFDocument } from "../reportDownload/ScanReportPDF";
 import {
   ScanLine,
   X,
