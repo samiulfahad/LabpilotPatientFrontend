@@ -17,7 +17,9 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { Scanner } from "@yudiel/react-qr-scanner";
+import { pdf } from "@react-pdf/renderer";
 import scanService from "../../api/scan";
+import { ScanReportPDFDocument } from "./ScanReportPDF";
 import {
   ScanLine,
   X,
@@ -52,6 +54,12 @@ const SCAN_CONSTRAINTS = {
   facingMode: "environment",
   width: { ideal: 480 },
   height: { ideal: 480 },
+};
+
+const formatDate = (val) => {
+  if (!val) return "";
+  const d = new Date(val);
+  return isNaN(d) ? "" : d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 };
 
 // ── Small presentational bits ───────────────────────────────────────────
@@ -323,15 +331,77 @@ export default function ScanInvoice({ onDownloadReports }) {
     lookup(parsed.labId, parsed.invoiceId);
   }
 
+  // Triggers a real file download for a single blob (no popup blocker issues
+  // since it's not window.open, just a synthetic <a> click).
+  function saveBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   async function handleDownload() {
     if (!data) return;
     setDownloading(true);
+    setError("");
     try {
       if (onDownloadReports) {
         await onDownloadReports(data);
-      } else {
-        window.open(`/api/invoice/${data.invoiceId}/reports/download`, "_blank", "noopener,noreferrer");
+        return;
       }
+
+      const labId = routeLabId || data.labId;
+      const invoiceId = data.invoiceId;
+      const readyTests = (data.tests || []).filter((t) => t.isOnline && t.isCompleted);
+
+      if (!labId || !readyTests.length) {
+        setError("ডাউনলোডের জন্য কোনো প্রস্তুত রিপোর্ট নেই।");
+        return;
+      }
+
+      const patientForPdf = {
+        name: data.patient?.name,
+        age: data.patient?.age != null ? `${data.patient.age} yrs` : "",
+        gender: data.patient?.gender,
+        contactNumber: data.patient?.contactNumber,
+        referredBy: data.referrer?.name ?? "",
+      };
+
+      // Sequential, not Promise.all: most browsers block multiple
+      // near-simultaneous synthetic-click downloads as popups.
+      for (const test of readyTests) {
+        const testId = test.testId ?? test._id ?? test.id;
+        if (!testId) continue;
+
+        const res = await scanService.getReport(labId, invoiceId, testId);
+        const payload = res.data;
+
+        const blob = await pdf(
+          <ScanReportPDFDocument
+            report={payload.report}
+            reportName={payload.testName}
+            invoiceId={payload.invoiceId}
+            patient={{
+              ...patientForPdf,
+              sampleDate: formatDate(payload.report?.sampleCollectionDate),
+              reportDate: formatDate(payload.report?.reportDate),
+            }}
+            labInfo={payload.labInfo}
+          />,
+        ).toBlob();
+
+        saveBlob(blob, `${(payload.testName || test.name || "report").replace(/\s+/g, "_")}_report.pdf`);
+
+        // Small gap between downloads keeps some browsers from silently
+        // dropping the second/third triggered file save.
+        await new Promise((r) => setTimeout(r, 400));
+      }
+    } catch (err) {
+      setError(err?.response?.data?.error || "রিপোর্ট ডাউনলোড করা সম্ভব হয়নি।");
     } finally {
       setDownloading(false);
     }
@@ -471,6 +541,13 @@ export default function ScanInvoice({ onDownloadReports }) {
             </div>
           )}
         </div>
+
+        {error && (
+          <div className="mx-4 mb-4 flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2.5 text-xs text-red-600">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+            {error}
+          </div>
+        )}
       </div>
     );
   }
