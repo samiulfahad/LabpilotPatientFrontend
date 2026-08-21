@@ -5,20 +5,18 @@ import { Scanner } from "@yudiel/react-qr-scanner";
 import ReportDrawer from "../../components/reports/ReportDrawer";
 import { pdf } from "@react-pdf/renderer";
 import { ReportPDFDocument } from "../../components/reports/ReportPDF";
-
 import scanService from "../../api/scan";
+
 import {
   ScanLine,
   X,
   Zap,
   ZapOff,
   CheckCircle2,
-  User,
   Phone,
   Stethoscope,
   UserRound,
   FlaskConical,
-  Wifi,
   WifiOff,
   Clock,
   CreditCard,
@@ -29,6 +27,10 @@ import {
   Download,
   MapPin,
   ShieldCheck,
+  Building2,
+  Mail,
+  FileText,
+  Activity,
 } from "lucide-react";
 
 const HEX24 = /^[a-fA-F0-9]{24}$/;
@@ -52,14 +54,16 @@ function formatDate(value) {
 
 /* ── Small building blocks ────────────────────────────────────────────── */
 
-function InfoRow({ icon: Icon, label, value }) {
+function InfoItem({ icon: Icon, label, value }) {
   if (!value) return null;
   return (
-    <div className="flex items-start gap-3 py-2">
-      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-[#1E4FA0]/60" strokeWidth={1.75} />
-      <div className="min-w-0">
-        <div className="text-[11px] uppercase tracking-wide text-neutral-500 font-mono">{label}</div>
-        <div className="truncate text-sm text-neutral-800">{value}</div>
+    <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-slate-50/50 border border-slate-100">
+      <div className="flex items-center gap-1.5 text-slate-500">
+        <Icon className="h-3.5 w-3.5" strokeWidth={2} />
+        <span className="text-[11px] uppercase tracking-wider font-semibold">{label}</span>
+      </div>
+      <div className="text-[13px] text-slate-800 font-bold leading-snug truncate" title={value}>
+        {value}
       </div>
     </div>
   );
@@ -67,40 +71,63 @@ function InfoRow({ icon: Icon, label, value }) {
 
 function BrandMark({ className = "" }) {
   return (
-    <div className={`inline-flex items-center gap-1.5 text-[11px] font-medium text-neutral-400 ${className}`}>
-      <ShieldCheck className="h-3.5 w-3.5 text-[#0F6E5C]/60" strokeWidth={1.75} />
-      <span>
-        <span className="text-neutral-500">LabPilot Pro</span> দ্বারা সুরক্ষিত যাচাইকরণ
-      </span>
+    <div className={`inline-flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 ${className}`}>
+      <ShieldCheck className="h-3.5 w-3.5 text-indigo-500" strokeWidth={1.75} />
+      <span>Secured by LabPilot Pro</span>
     </div>
   );
 }
 
-function LabLetterhead({ labInfo }) {
+function LabHeader({ labInfo }) {
   if (!labInfo?.name) return null;
   return (
-    <section className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="truncate text-base font-bold text-neutral-900">{labInfo.name}</h2>
-          {labInfo.tagline && <p className="mt-0.5 text-xs text-neutral-500">{labInfo.tagline}</p>}
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6 relative overflow-hidden mb-5">
+      <div className="absolute -top-12 -right-12 w-32 h-32 bg-indigo-50 rounded-full blur-3xl opacity-60 pointer-events-none"></div>
+
+      <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-start gap-4">
+          <div className="h-14 w-14 shrink-0 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+            <Building2 className="h-7 w-7 text-indigo-600" strokeWidth={1.5} />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-slate-900 tracking-tight">{labInfo.name}</h2>
+            {labInfo.tagline && <p className="text-sm text-slate-500 font-medium mt-0.5">{labInfo.tagline}</p>}
+          </div>
+        </div>
+        <div className="hidden md:flex">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 border border-emerald-100">
+            <ShieldCheck className="h-4 w-4" /> যাচাইকৃত ল্যাব
+          </span>
+        </div>
+      </div>
+
+      {(labInfo.address || labInfo.phone || labInfo.email || labInfo.regNo) && (
+        <div className="mt-6 pt-5 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-y-3 gap-x-4 text-[12px] text-slate-600">
           {labInfo.address && (
-            <div className="mt-2 flex items-start gap-1.5 text-xs text-neutral-500">
-              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-neutral-400" strokeWidth={1.75} />
-              <span>{labInfo.address}</span>
+            <div className="flex items-start gap-2 lg:col-span-2">
+              <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400 mt-0.5" />
+              <span className="leading-relaxed">{labInfo.address}</span>
+            </div>
+          )}
+          {labInfo.phone && (
+            <div className="flex items-center gap-2">
+              <Phone className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+              <span>{labInfo.phone}</span>
+            </div>
+          )}
+          {labInfo.email && (
+            <div className="flex items-center gap-2">
+              <Mail className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+              <span>{labInfo.email}</span>
             </div>
           )}
         </div>
-        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#0F6E5C]/10 px-2.5 py-1 text-[10px] font-semibold text-[#0F6E5C]">
-          <ShieldCheck className="h-3 w-3" strokeWidth={2} />
-          যাচাইকৃত
-        </span>
-      </div>
-    </section>
+      )}
+    </div>
   );
 }
 
-function TestRow({ test, onView }) {
+function TestItem({ test, onView }) {
   const [downloading, setDownloading] = useState(false);
   const canAccess = test.isOnline && test.isCompleted;
 
@@ -143,57 +170,50 @@ function TestRow({ test, onView }) {
   };
 
   return (
-    <div className="border-b border-dashed border-neutral-200 py-2.5 last:border-none">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2.5">
-          {test.isOnline ? (
-            <Wifi className="h-4 w-4 shrink-0 text-[#1E4FA0]" strokeWidth={1.75} />
-          ) : (
-            <WifiOff className="h-4 w-4 shrink-0 text-neutral-400" strokeWidth={1.75} />
-          )}
-          <span className="truncate text-sm text-neutral-800">{test.name}</span>
+    <div className="group bg-white border border-slate-200 rounded-xl p-4 transition-all hover:shadow-md hover:border-indigo-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex items-start gap-3.5">
+        <div
+          className={`mt-0.5 p-2 rounded-lg ${test.isOnline ? (test.isCompleted ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-500") : "bg-slate-50 text-slate-400"}`}
+        >
+          <FlaskConical className="h-5 w-5" strokeWidth={2} />
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {test.isOnline ? (
-            test.isCompleted ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-[#0F6E5C]/10 px-2 py-0.5 text-[11px] font-medium text-[#0F6E5C]">
-                <CheckCircle2 className="h-3 w-3" strokeWidth={2} />
-                রিপোর্ট প্রস্তুত
-              </span>
+        <div>
+          <div className="text-sm font-bold text-slate-800 leading-tight mb-1">{test.name}</div>
+          <div className="flex items-center gap-2">
+            {test.isOnline ? (
+              test.isCompleted ? (
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-100/50 px-2 py-0.5 rounded-full">
+                  <CheckCircle2 className="h-3 w-3" /> রিপোর্ট প্রস্তুত
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-100/50 px-2 py-0.5 rounded-full">
+                  <Clock className="h-3 w-3" /> প্রক্রিয়াধীন
+                </span>
+              )
             ) : (
-              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
-                <Clock className="h-3 w-3" strokeWidth={2} />
-                প্রক্রিয়াধীন
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
+                <WifiOff className="h-3 w-3" /> অফলাইন টেস্ট
               </span>
-            )
-          ) : (
-            <span className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-medium text-neutral-500">
-              অফলাইন
-            </span>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
       {canAccess && (
-        <div className="mt-2 flex items-center gap-2 pl-6">
+        <div className="flex items-center gap-2 w-full sm:w-auto pt-3 sm:pt-0 border-t border-slate-100 sm:border-0 mt-2 sm:mt-0">
           <button
             onClick={() => onView(test)}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-neutral-200 py-1.5 text-xs font-semibold text-neutral-600 transition-colors hover:border-[#1E4FA0]/40 hover:text-[#1E4FA0]"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[13px] font-bold rounded-lg transition-colors"
           >
-            <Eye className="h-3.5 w-3.5" strokeWidth={1.75} />
-            রিপোর্ট দেখুন
+            <Eye className="h-4 w-4" /> দেখুন
           </button>
           <button
             onClick={handleDownload}
             disabled={downloading}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-neutral-200 py-1.5 text-xs font-semibold text-neutral-600 transition-colors hover:border-[#0F6E5C]/40 hover:text-[#0F6E5C] disabled:opacity-50"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-[13px] font-bold rounded-lg transition-colors disabled:opacity-70"
           >
-            {downloading ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.75} />
-            ) : (
-              <Download className="h-3.5 w-3.5" strokeWidth={1.75} />
-            )}
-            {downloading ? "ডাউনলোড হচ্ছে…" : "রিপোর্ট ডাউনলোড"}
+            {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            {downloading ? "..." : "ডাউনলোড"}
           </button>
         </div>
       )}
@@ -201,23 +221,21 @@ function TestRow({ test, onView }) {
   );
 }
 
-/* ── Scanner modal ─────────────────────────────────────────────────────── */
-
-const CORNER = "absolute w-7 h-7 border-white/90";
+/* ── Scanner Modal ─────────────────────────────────────────────────────── */
+const CORNER = "absolute w-6 h-6 border-white/80";
 
 const Viewfinder = ({ locked }) => (
   <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-    <div className="relative w-[68%] aspect-square">
-      <div className={`${CORNER} top-0 left-0 border-t-[3px] border-l-[3px] rounded-tl-xl`} />
-      <div className={`${CORNER} top-0 right-0 border-t-[3px] border-r-[3px] rounded-tr-xl`} />
-      <div className={`${CORNER} bottom-0 left-0 border-b-[3px] border-l-[3px] rounded-bl-xl`} />
-      <div className={`${CORNER} bottom-0 right-0 border-b-[3px] border-r-[3px] rounded-br-xl`} />
-
+    <div className="relative w-[75%] aspect-square">
+      <div className={`${CORNER} top-0 left-0 border-t-[3px] border-l-[3px] rounded-tl-2xl`} />
+      <div className={`${CORNER} top-0 right-0 border-t-[3px] border-r-[3px] rounded-tr-2xl`} />
+      <div className={`${CORNER} bottom-0 left-0 border-b-[3px] border-l-[3px] rounded-bl-2xl`} />
+      <div className={`${CORNER} bottom-0 right-0 border-b-[3px] border-r-[3px] rounded-br-2xl`} />
       {!locked ? (
-        <div className="absolute inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-[#3FD6B8] to-transparent shadow-[0_0_12px_2px_rgba(63,214,184,0.8)] animate-[scanline_2.2s_ease-in-out_infinite]" />
+        <div className="absolute inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-indigo-400 to-transparent animate-[scanline_2.5s_linear_infinite]" />
       ) : (
-        <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-[#0F6E5C]/20">
-          <CheckCircle2 className="h-14 w-14 text-[#3FD6B8] drop-shadow-[0_0_10px_rgba(63,214,184,0.9)] animate-[pop_0.3s_ease]" />
+        <div className="absolute inset-0 flex items-center justify-center bg-indigo-500/20 rounded-2xl">
+          <CheckCircle2 className="h-16 w-16 text-emerald-400 drop-shadow-[0_0_12px_rgba(52,211,153,0.8)]" />
         </div>
       )}
     </div>
@@ -251,48 +269,40 @@ function ScannerModal({ visible, onScan, onClose }) {
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4 transition-opacity duration-150 ${
+      className={`fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-md transition-all duration-200 ${
         visible ? "opacity-100" : "pointer-events-none opacity-0"
       }`}
     >
       <style>{`
-        @keyframes scanline { 0%,100% { top: 6%; opacity: .3; } 50% { top: 92%; opacity: 1; } }
-        @keyframes pop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes scanline { 0%,100% { top: 8%; opacity: .4; } 50% { top: 88%; opacity: 1; } }
       `}</style>
-
       <div
-        className="relative w-full max-w-sm overflow-hidden rounded-[28px] bg-black shadow-[0_30px_80px_rgba(0,0,0,0.5)] animate-[fadeUp_0.25s_ease]"
+        className="relative w-full max-w-md bg-black rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-5 pb-8 pt-5">
+        <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-5 py-4 bg-gradient-to-b from-black/70 to-transparent">
           <div className="flex items-center gap-2 text-white">
-            <ScanLine className="h-4 w-4 text-[#3FD6B8]" strokeWidth={1.75} />
-            <span className="text-sm font-semibold tracking-tight">ইনভয়েস স্ক্যান করুন</span>
+            <ScanLine className="h-5 w-5 text-indigo-300" />
+            <span className="font-semibold text-sm">ইনভয়েস স্ক্যান করুন</span>
           </div>
           <button
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-colors hover:bg-white/20"
+            className="h-8 w-8 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-colors"
           >
-            <X className="h-4 w-4" strokeWidth={2} />
+            <X className="h-4 w-4" />
           </button>
         </div>
-
-        <div className="relative aspect-square">
+        <div className="relative aspect-square bg-black">
           {error ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-black px-8 text-center">
-              <p className="text-xs font-medium text-rose-300">{error}</p>
+            <div className="absolute inset-0 flex items-center justify-center text-center px-8">
+              <p className="text-rose-300 text-sm font-medium">{error}</p>
             </div>
           ) : (
             <>
               <Scanner
                 onScan={handleResult}
                 onError={(err) =>
-                  setError(
-                    err?.name === "NotAllowedError"
-                      ? "ক্যামেরা অনুমতি প্রয়োজন। ব্রাউজার সেটিংস থেকে অনুমতি দিন।"
-                      : "ক্যামেরা চালু করা যায়নি।",
-                  )
+                  setError(err?.name === "NotAllowedError" ? "ক্যামেরার অনুমতি প্রয়োজন।" : "ক্যামেরা চালু করা যায়নি।")
                 }
                 formats={["qr_code"]}
                 constraints={SCAN_CONSTRAINTS}
@@ -306,26 +316,19 @@ function ScannerModal({ visible, onScan, onClose }) {
             </>
           )}
         </div>
-
-        <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/80 to-transparent px-5 pb-5 pt-8">
-          <p className="mb-3 text-center text-[11px] font-medium text-white/60">QR কোডটি ফ্রেমের মধ্যে রাখুন</p>
-          <div className="flex items-center gap-2">
+        <div className="absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-black/80 to-transparent px-5 pb-6 pt-10">
+          <p className="text-center text-[12px] text-white/60 mb-3">QR কোডটি ফ্রেমের মধ্যে রাখুন</p>
+          <div className="flex items-center gap-3">
             <button
               onClick={toggleTorch}
-              className={`flex flex-1 items-center justify-center gap-1.5 rounded-2xl py-2.5 text-xs font-bold backdrop-blur transition-all ${
-                torch ? "bg-amber-400 text-black" : "bg-white/10 text-white hover:bg-white/20"
-              }`}
+              className={`flex-1 py-3 rounded-2xl text-sm font-bold backdrop-blur transition-all ${torch ? "bg-amber-400 text-black" : "bg-white/10 text-white hover:bg-white/20"}`}
             >
-              {torch ? (
-                <ZapOff className="h-3.5 w-3.5" strokeWidth={2} />
-              ) : (
-                <Zap className="h-3.5 w-3.5" strokeWidth={2} />
-              )}
+              {torch ? <ZapOff className="inline h-4 w-4 mr-1" /> : <Zap className="inline h-4 w-4 mr-1" />}
               {torch ? "টর্চ বন্ধ" : "টর্চ"}
             </button>
             <button
               onClick={onClose}
-              className="flex-1 rounded-2xl bg-white py-2.5 text-xs font-bold text-black transition-all hover:bg-white/90"
+              className="flex-1 py-3 rounded-2xl bg-white text-black text-sm font-bold hover:bg-white/90 transition-all"
             >
               বাতিল
             </button>
@@ -337,7 +340,7 @@ function ScannerModal({ visible, onScan, onClose }) {
   );
 }
 
-/* ── Page ──────────────────────────────────────────────────────────────── */
+/* ── Main Page ─────────────────────────────────────────────────────────── */
 
 export default function ScanInvoice() {
   const { labId: routeLabId, invoiceId: routeInvoiceId } = useParams();
@@ -346,7 +349,6 @@ export default function ScanInvoice() {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMounted, setModalMounted] = useState(false);
   const [viewingTest, setViewingTest] = useState(null);
-
   const releaseTimer = useRef(null);
 
   const [loading, setLoading] = useState(false);
@@ -364,36 +366,26 @@ export default function ScanInvoice() {
   }, []);
 
   const warmStart = useCallback(() => openScanner(), [openScanner]);
-
   const closeScanner = useCallback(() => {
     setModalOpen(false);
     releaseTimer.current = setTimeout(() => setModalMounted(false), IDLE_RELEASE_MS);
   }, []);
 
   useEffect(() => () => releaseTimer.current && clearTimeout(releaseTimer.current), []);
-
   useEffect(() => {
-    if (routeLabId && routeInvoiceId) {
-      lookup(routeLabId, routeInvoiceId);
-    }
+    if (routeLabId && routeInvoiceId) lookup(routeLabId, routeInvoiceId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeLabId, routeInvoiceId]);
 
   async function lookup(labId, invoiceId) {
     setError("");
-    if (!HEX24.test(labId)) {
-      setError("ল্যাব আইডি সঠিক নয়।");
+    if (!HEX24.test(labId) || !HEX24.test(invoiceId.trim())) {
+      setError("আইডি সঠিক নয়।");
       return;
     }
-    const cleanInvoiceId = invoiceId.trim();
-    if (!HEX24.test(cleanInvoiceId)) {
-      setError("ইনভয়েস আইডি সঠিক নয়।");
-      return;
-    }
-
     setLoading(true);
     try {
-      const res = await scanService.scan(labId, cleanInvoiceId);
+      const res = await scanService.scan(labId, invoiceId.trim());
       setData(res.data);
     } catch (err) {
       setError(err?.response?.data?.error || "ইনভয়েস খুঁজে পাওয়া যায়নি।");
@@ -417,176 +409,189 @@ export default function ScanInvoice() {
     if (routeLabId || routeInvoiceId) navigate("/");
   }
 
-  /* ── Result view ───────────────────────────────────────────────────── */
   if (data) {
     const { patient, payment, tests, counts, doctor, labInfo } = data;
+
     return (
-      <div className="mx-auto flex min-h-[100dvh] max-w-md flex-col bg-[#FAF9F6] font-sans">
-        <header className="flex items-center gap-3 border-b border-neutral-200 bg-white px-4 py-3">
-          <button
-            onClick={reset}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100"
-          >
-            <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
-          </button>
-          <div>
-            <div className="font-mono text-xs text-neutral-500">ইনভয়েস #{data.invoiceId}</div>
-            <div className="text-sm font-semibold text-neutral-900">যাচাইকৃত রিপোর্ট</div>
+      <div className="min-h-screen bg-slate-50 font-sans pb-12">
+        <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-20">
+          <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
+            <button
+              onClick={reset}
+              className="p-2 -ml-2 rounded-full hover:bg-slate-100 text-slate-600 transition-colors"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <div className="text-center">
+              <div className="text-sm font-bold text-slate-900 tracking-tight">যাচাইকৃত রিপোর্ট</div>
+              <div className="text-[11px] text-slate-500 font-mono tracking-wider">INV: {data.invoiceId}</div>
+            </div>
+            <div className="w-9"></div>
           </div>
         </header>
 
-        <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
-          <LabLetterhead labInfo={labInfo} />
+        <main className="max-w-3xl mx-auto px-4 py-6">
+          {/* 1. Lab Header */}
+          <LabHeader labInfo={labInfo} />
 
-          <section className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
-            <div className="mb-1 flex items-center gap-2 text-[#0F6E5C]">
-              <User className="h-4 w-4" strokeWidth={1.75} />
-              <h2 className="text-sm font-semibold">রোগীর তথ্য</h2>
+          {/* 2. Patient Info (Horizontal) */}
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/60 mb-6">
+            <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
+              <div className="p-1.5 bg-indigo-50 rounded-md">
+                <UserRound className="h-4 w-4 text-indigo-600" />
+              </div>
+              <h3 className="text-[15px] font-bold text-slate-800">রোগীর তথ্য</h3>
             </div>
-            <div className="divide-y divide-neutral-100">
-              <InfoRow icon={User} label="নাম" value={patient.name} />
-              <InfoRow
-                icon={UserRound}
-                label="বয়স / লিঙ্গ"
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <InfoItem icon={UserRound} label="নাম" value={patient.name} />
+              <InfoItem
+                icon={Activity}
+                label="বয়স ও লিঙ্গ"
                 value={patient.age != null ? `${patient.age} বছর · ${patient.gender}` : patient.gender}
               />
-              <InfoRow icon={Phone} label="মোবাইল" value={patient.contactNumber} />
+              <InfoItem icon={Phone} label="মোবাইল নম্বর" value={patient.contactNumber} />
               {doctor && (
-                <InfoRow
+                <InfoItem
                   icon={Stethoscope}
-                  label="ডাক্তার"
+                  label="রেফার্ড বাই"
                   value={`${doctor.name}${doctor.degree ? ` (${doctor.degree})` : ""}`}
                 />
               )}
             </div>
-          </section>
+          </div>
 
-          <section className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
-            <div className="mb-2 flex items-center gap-2 text-[#0F6E5C]">
-              <CreditCard className="h-4 w-4" strokeWidth={1.75} />
-              <h2 className="text-sm font-semibold">পেমেন্ট তথ্য</h2>
-            </div>
-            <div className="grid grid-cols-3 gap-3 font-mono text-sm">
-              <div className="rounded-lg bg-neutral-50 p-2.5">
-                <div className="text-[11px] uppercase text-neutral-500">মোট</div>
-                <div className="text-neutral-900">৳{payment.final}</div>
-              </div>
-              <div className="rounded-lg bg-neutral-50 p-2.5">
-                <div className="text-[11px] uppercase text-neutral-500">জমা</div>
-                <div className="text-neutral-900">৳{payment.paid}</div>
-              </div>
-              <div className={`rounded-lg p-2.5 ${payment.due > 0 ? "bg-red-50" : "bg-[#0F6E5C]/10"}`}>
-                <div className="text-[11px] uppercase text-neutral-500">বকেয়া</div>
-                <div className={payment.due > 0 ? "text-red-600" : "text-[#0F6E5C]"}>৳{payment.due}</div>
-              </div>
-            </div>
-            <div className="mt-3">
-              {payment.isFullyPaid ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#0F6E5C]/10 px-2.5 py-1 text-xs font-medium text-[#0F6E5C]">
-                  <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} />
-                  সম্পূর্ণ পরিশোধিত
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600">
-                  <AlertTriangle className="h-3.5 w-3.5" strokeWidth={2} />
-                  বকেয়া আছে
-                </span>
-              )}
-            </div>
-          </section>
+          {/* 3. Reports Column */}
+          <div className="mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-4 px-1 gap-3">
+              <h3 className="text-lg font-bold text-slate-900">টেস্ট রিপোর্ট সমূহ</h3>
 
-          <section className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
-            <div className="mb-1 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-[#0F6E5C]">
-                <FlaskConical className="h-4 w-4" strokeWidth={1.75} />
-                <h2 className="text-sm font-semibold">টেস্ট ({counts.testCount})</h2>
+              {/* Online/Offline Counts */}
+              <div className="flex flex-wrap items-center gap-2 text-[12px]">
+                <div className="flex items-center gap-1.5 bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-md font-bold border border-indigo-100/50">
+                  <span className="opacity-70">অনলাইন:</span> {counts.onlineCount}
+                </div>
+                <div className="flex items-center gap-1.5 bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md font-bold border border-slate-200/50">
+                  <span className="opacity-70">অফলাইন:</span> {counts.offlineCount}
+                </div>
+                <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-md font-bold border border-emerald-100/50">
+                  <CheckCircle2 className="h-3 w-3" />
+                  <span className="opacity-70">প্রস্তুত:</span> {counts.onlineCompletedCount}
+                </div>
               </div>
-              <span className="font-mono text-[11px] text-neutral-500">
-                অনলাইন {counts.onlineCompletedCount}/{counts.onlineCount} · অফলাইন {counts.offlineCount}
-              </span>
             </div>
-            <div>
+
+            <div className="space-y-3">
               {tests.map((t, i) => (
-                <TestRow
+                <TestItem
                   key={t.testId ?? i}
                   test={{ ...t, labId: data.labId, invoiceId: data.invoiceObjectId }}
                   onView={(test) => setViewingTest({ testId: test.testId, name: test.name })}
                 />
               ))}
             </div>
-          </section>
+          </div>
+
+          {/* 4. Payment Info (Horizontal Bottom Bar) */}
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/60 flex flex-col md:flex-row justify-between items-center gap-6">
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              <div className={`p-3 rounded-xl ${payment.due > 0 ? "bg-amber-50" : "bg-emerald-50"}`}>
+                <CreditCard className={`h-6 w-6 ${payment.due > 0 ? "text-amber-600" : "text-emerald-600"}`} />
+              </div>
+              <div>
+                <h3 className="text-[15px] font-bold text-slate-800">পেমেন্ট স্ট্যাটাস</h3>
+                <div
+                  className={`text-sm font-semibold mt-0.5 ${payment.due > 0 ? "text-amber-600" : "text-emerald-600"}`}
+                >
+                  {payment.isFullyPaid ? "সম্পূর্ণ পরিশোধিত" : "বকেয়া রয়েছে"}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center w-full md:w-auto justify-between md:justify-end gap-6 bg-slate-50 md:bg-transparent p-4 md:p-0 rounded-xl border border-slate-100 md:border-none">
+              <div className="text-left md:text-right">
+                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">মোট বিল</div>
+                <div className="font-mono font-semibold text-slate-700 text-sm">৳ {payment.final}</div>
+              </div>
+              <div className="text-left md:text-right">
+                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">জমা</div>
+                <div className="font-mono font-semibold text-slate-700 text-sm">৳ {payment.paid}</div>
+              </div>
+              <div className="text-left md:text-right pl-4 border-l border-slate-200">
+                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">বর্তমান বকেয়া</div>
+                <div
+                  className={`font-mono font-black text-lg leading-none ${payment.due > 0 ? "text-rose-600" : "text-emerald-600"}`}
+                >
+                  ৳ {payment.due}
+                </div>
+              </div>
+            </div>
+          </div>
 
           {error && (
-            <div className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2.5 text-xs text-red-600">
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
-              {error}
+            <div className="mt-6 flex items-start gap-3 bg-rose-50 text-rose-700 text-sm rounded-xl p-4 border border-rose-200">
+              <AlertTriangle className="h-5 w-5 shrink-0" />
+              <span className="font-medium leading-relaxed">{error}</span>
             </div>
           )}
 
-          <div className="flex justify-center pb-2 pt-1">
+          <div className="text-center mt-12 pb-6">
             <BrandMark />
           </div>
+        </main>
 
-          {viewingTest && (
-            <ReportDrawer
-              labId={data.labId}
-              invoiceId={data.invoiceObjectId}
-              testId={viewingTest.testId}
-              testName={viewingTest.name}
-              onClose={() => setViewingTest(null)}
-            />
-          )}
-        </div>
+        {viewingTest && (
+          <ReportDrawer
+            labId={data.labId}
+            invoiceId={data.invoiceObjectId}
+            testId={viewingTest.testId}
+            testName={viewingTest.name}
+            onClose={() => setViewingTest(null)}
+          />
+        )}
       </div>
     );
   }
 
-  /* ── Idle / scan view ──────────────────────────────────────────────── */
+  /* ── Idle / Scan View ───────────────────────────────────────────────── */
   return (
-    <div className="mx-auto flex min-h-[100dvh] max-w-md flex-col bg-[#FAF9F6] font-sans">
-      <header className="border-b border-neutral-200 bg-white px-4 py-3">
-        <div className="flex items-center gap-2">
-          <ScanLine className="h-5 w-5 text-[#0F6E5C]" strokeWidth={1.75} />
-          <h1 className="text-sm font-semibold text-neutral-900">ইনভয়েস স্ক্যান করুন</h1>
+    <div className="min-h-screen bg-slate-50">
+      <div className="max-w-md mx-auto px-6 py-12 flex flex-col items-center justify-center min-h-screen text-center">
+        <div className="relative mb-10">
+          <div className="absolute inset-0 bg-indigo-300/40 rounded-full blur-3xl animate-pulse"></div>
+          <div className="relative h-32 w-32 rounded-3xl bg-white shadow-xl shadow-indigo-900/5 border border-slate-100 flex items-center justify-center rotate-3 transition-transform hover:rotate-0">
+            {loading ? (
+              <Loader2 className="h-14 w-14 text-indigo-500 animate-spin" strokeWidth={1.5} />
+            ) : (
+              <ScanLine className="h-14 w-14 text-indigo-600" strokeWidth={1.5} />
+            )}
+          </div>
         </div>
-      </header>
-
-      <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 text-center">
-        <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-[#0F6E5C]/10">
-          {loading ? (
-            <Loader2 className="h-9 w-9 animate-spin text-[#0F6E5C]" strokeWidth={1.5} />
-          ) : (
-            <ScanLine className="h-10 w-10 text-[#0F6E5C]" strokeWidth={1.5} />
-          )}
-        </div>
-
-        <div className="space-y-1">
-          <p className="text-sm font-medium text-neutral-800">
-            {loading ? "ইনভয়েস যাচাই করা হচ্ছে…" : "ইনভয়েসের QR কোড স্ক্যান করুন"}
-          </p>
-          {!loading && <p className="text-xs text-neutral-500">ক্যামেরা চালু করতে নিচের বাটনে চাপুন</p>}
-        </div>
-
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mb-3 tracking-tight">
+          {loading ? "যাচাই করা হচ্ছে..." : "রিপোর্ট স্ক্যান করুন"}
+        </h1>
+        <p className="text-slate-500 mb-10 max-w-sm text-[15px] leading-relaxed">
+          {loading
+            ? "অনুগ্রহ করে অপেক্ষা করুন, সার্ভার থেকে আপনার রিপোর্ট সংগ্রহ করা হচ্ছে।"
+            : "আপনার ইনভয়েসে থাকা QR কোডটি স্ক্যান করে অনলাইনেই অরিজিনাল রিপোর্ট সংগ্রহ করুন।"}
+        </p>
         <button
           onPointerDown={warmStart}
           onClick={openScanner}
           disabled={loading}
-          className="flex w-full max-w-xs items-center justify-center gap-2 rounded-lg bg-[#0F6E5C] py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0c5a4a] active:scale-[0.99] disabled:opacity-60"
+          className="w-full max-w-[280px] h-14 rounded-2xl bg-indigo-600 text-white font-bold text-lg shadow-lg shadow-indigo-600/30 hover:bg-indigo-700 hover:shadow-indigo-600/40 transition-all transform hover:-translate-y-0.5 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
         >
-          <ScanLine className="h-4 w-4" strokeWidth={2} />
-          স্ক্যান শুরু করুন
+          <ScanLine className="h-5 w-5" /> স্ক্যান শুরু করুন
         </button>
-
-        <BrandMark />
+        <div className="mt-16">
+          <BrandMark />
+        </div>
       </div>
-
       {error && (
-        <div className="mx-4 mb-4 flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2.5 text-xs text-red-600">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
-          {error}
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-3rem)] max-w-sm bg-rose-50 border border-rose-200 shadow-lg rounded-2xl px-5 py-4 flex items-center gap-3 text-sm text-rose-700 font-medium z-50">
+          <AlertTriangle className="h-5 w-5 shrink-0 text-rose-500" />
+          <span>{error}</span>
         </div>
       )}
-
       {modalMounted && <ScannerModal visible={modalOpen} onScan={handleScanResult} onClose={closeScanner} />}
     </div>
   );
