@@ -1,25 +1,12 @@
-/**
- * ScanInvoice
- * npm install @yudiel/react-qr-scanner
- *
- * Scanner UX notes (why this is fast):
- * - Camera permission/negotiation starts on pointerdown (before "click"
- *   fires), so the prompt appears the instant a finger touches the button.
- * - Constraints request 480p instead of default/max res — resolution
- *   negotiation is the single biggest chunk of camera-open latency.
- * - Torch is NOT part of the initial constraints (that forces a second
- *   negotiation on many devices); it's applied to the live track instead.
- * - The scanner modal stays mounted between opens (hidden + paused) for a
- *   short idle window so re-scanning after an error is instant. The
- *   underlying camera is only released after IDLE_RELEASE_MS of being closed.
- */
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { Scanner } from "@yudiel/react-qr-scanner";
+import ReportDrawer from "../../components/reports/ReportDrawer";
 import { pdf } from "@react-pdf/renderer";
+import { ReportPDFDocument } from "../../components/reports/ReportPDF";
+
 import scanService from "../../api/scan";
-import { ScanReportPDFDocument } from "../reportDownload/ScanReportPDF";
 import {
   ScanLine,
   X,
@@ -34,48 +21,36 @@ import {
   Wifi,
   WifiOff,
   Clock,
-  Download,
-  Loader2 as DownloadSpinner,
   CreditCard,
   ArrowLeft,
   AlertTriangle,
   Loader2,
+  Eye,
+  Download,
+  MapPin,
+  ShieldCheck,
 } from "lucide-react";
 
-function parseScanPayload(raw) {
-  const text = (raw || "").trim();
-  const match = text.match(/([a-fA-F0-9]{24})\/([a-fA-F0-9]{24})\/?$/);
-  if (match) return { labId: match[1], invoiceId: match[2] };
-  return null;
-}
-
 const HEX24 = /^[a-fA-F0-9]{24}$/;
-const IDLE_RELEASE_MS = 20_000; // keep camera warm this long after closing
+const IDLE_RELEASE_MS = 20_000;
 const SCAN_CONSTRAINTS = {
   facingMode: "environment",
   width: { ideal: 480 },
   height: { ideal: 480 },
 };
 
-const formatDate = (val) => {
-  if (!val) return "";
-  const d = new Date(val);
-  return isNaN(d) ? "" : d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
-};
-
-// Triggers a real file download for a blob via a synthetic <a> click.
-function saveBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+function parseScanPayload(raw) {
+  const text = (raw || "").trim();
+  const match = text.match(/([a-fA-F0-9]{24})\/([a-fA-F0-9]{24})\/?$/);
+  return match ? { labId: match[1], invoiceId: match[2] } : null;
 }
 
-// ── Small presentational bits ───────────────────────────────────────────
+function formatDate(value) {
+  if (!value) return "";
+  return new Date(value).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+/* ── Small building blocks ────────────────────────────────────────────── */
 
 function InfoRow({ icon: Icon, label, value }) {
   if (!value) return null;
@@ -90,62 +65,143 @@ function InfoRow({ icon: Icon, label, value }) {
   );
 }
 
-// Per-test row: online+completed tests get their own download button.
-function TestRow({ test, canDownload, downloading, onDownload }) {
-  const testId = test.testId ?? test._id ?? test.id;
-  const showDownload = test.isOnline && test.isCompleted;
-
+function BrandMark({ className = "" }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-dashed border-neutral-200 py-2.5 last:border-none">
-      <div className="flex min-w-0 items-center gap-2.5">
-        {test.isOnline ? (
-          <Wifi className="h-4 w-4 shrink-0 text-[#1E4FA0]" strokeWidth={1.75} />
-        ) : (
-          <WifiOff className="h-4 w-4 shrink-0 text-neutral-400" strokeWidth={1.75} />
-        )}
-        <span className="truncate text-sm text-neutral-800">{test.name}</span>
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        {test.isOnline &&
-          (test.isCompleted ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-[#0F6E5C]/10 px-2 py-0.5 text-[11px] font-medium text-[#0F6E5C]">
-              <CheckCircle2 className="h-3 w-3" strokeWidth={2} />
-              রিপোর্ট প্রস্তুত
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
-              <Clock className="h-3 w-3" strokeWidth={2} />
-              প্রক্রিয়াধীন
-            </span>
-          ))}
-
-        {showDownload && (
-          <button
-            onClick={canDownload && testId ? () => onDownload(test) : undefined}
-            disabled={!canDownload || !testId || downloading}
-            title={!canDownload ? "সম্পূর্ণ পেমেন্ট প্রয়োজন" : !testId ? "টেস্ট আইডি পাওয়া যায়নি" : undefined}
-            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors ${
-              canDownload && testId
-                ? "bg-[#0F6E5C]/10 text-[#0F6E5C] hover:bg-[#0F6E5C]/20"
-                : "bg-neutral-100 text-neutral-300 cursor-not-allowed"
-            }`}
-          >
-            {downloading ? (
-              <DownloadSpinner className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
-            ) : (
-              <Download className="h-3.5 w-3.5" strokeWidth={2} />
-            )}
-          </button>
-        )}
-      </div>
+    <div className={`inline-flex items-center gap-1.5 text-[11px] font-medium text-neutral-400 ${className}`}>
+      <ShieldCheck className="h-3.5 w-3.5 text-[#0F6E5C]/60" strokeWidth={1.75} />
+      <span>
+        <span className="text-neutral-500">LabPilot Pro</span> দ্বারা সুরক্ষিত যাচাইকরণ
+      </span>
     </div>
   );
 }
 
-// ── Scanner modal ────────────────────────────────────────────────────────
-// Overlay camera scanner, styled to LabPilot Pro's teal/ledger palette.
-// visible = shown right now; mounted (controlled by parent) = kept alive
-// so a second scan (e.g. after an invalid code) doesn't re-negotiate camera.
+function LabLetterhead({ labInfo }) {
+  if (!labInfo?.name) return null;
+  return (
+    <section className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="truncate text-base font-bold text-neutral-900">{labInfo.name}</h2>
+          {labInfo.tagline && <p className="mt-0.5 text-xs text-neutral-500">{labInfo.tagline}</p>}
+          {labInfo.address && (
+            <div className="mt-2 flex items-start gap-1.5 text-xs text-neutral-500">
+              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-neutral-400" strokeWidth={1.75} />
+              <span>{labInfo.address}</span>
+            </div>
+          )}
+        </div>
+        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#0F6E5C]/10 px-2.5 py-1 text-[10px] font-semibold text-[#0F6E5C]">
+          <ShieldCheck className="h-3 w-3" strokeWidth={2} />
+          যাচাইকৃত
+        </span>
+      </div>
+    </section>
+  );
+}
+
+function TestRow({ test, onView }) {
+  const [downloading, setDownloading] = useState(false);
+  const canAccess = test.isOnline && test.isCompleted;
+
+  const handleDownload = async (e) => {
+    e.stopPropagation();
+    setDownloading(true);
+    try {
+      const { data } = await scanService.getReport(test.labId, test.invoiceId, test.testId);
+      const patient = {
+        name: data.patient?.name ?? "",
+        age: data.patient?.age != null ? `${data.patient.age} yrs` : "",
+        gender: data.patient?.gender ?? "",
+        contact: data.patient?.contactNumber ?? "",
+        referredBy: data.referrer?.name ?? "",
+        sampleDate: formatDate(data.report?.sampleCollectionDate),
+        reportDate: formatDate(data.report?.reportDate),
+      };
+      const blob = await pdf(
+        <ReportPDFDocument
+          report={data.report}
+          reportName={data.testName}
+          shortId={data.invoiceId}
+          patient={patient}
+          labInfo={data.labInfo}
+        />,
+      ).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${data.testName.replace(/\s+/g, "_")}_report.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <div className="border-b border-dashed border-neutral-200 py-2.5 last:border-none">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          {test.isOnline ? (
+            <Wifi className="h-4 w-4 shrink-0 text-[#1E4FA0]" strokeWidth={1.75} />
+          ) : (
+            <WifiOff className="h-4 w-4 shrink-0 text-neutral-400" strokeWidth={1.75} />
+          )}
+          <span className="truncate text-sm text-neutral-800">{test.name}</span>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {test.isOnline ? (
+            test.isCompleted ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#0F6E5C]/10 px-2 py-0.5 text-[11px] font-medium text-[#0F6E5C]">
+                <CheckCircle2 className="h-3 w-3" strokeWidth={2} />
+                রিপোর্ট প্রস্তুত
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                <Clock className="h-3 w-3" strokeWidth={2} />
+                প্রক্রিয়াধীন
+              </span>
+            )
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-medium text-neutral-500">
+              অফলাইন
+            </span>
+          )}
+        </div>
+      </div>
+
+      {canAccess && (
+        <div className="mt-2 flex items-center gap-2 pl-6">
+          <button
+            onClick={() => onView(test)}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-neutral-200 py-1.5 text-xs font-semibold text-neutral-600 transition-colors hover:border-[#1E4FA0]/40 hover:text-[#1E4FA0]"
+          >
+            <Eye className="h-3.5 w-3.5" strokeWidth={1.75} />
+            রিপোর্ট দেখুন
+          </button>
+          <button
+            onClick={handleDownload}
+            disabled={downloading}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-neutral-200 py-1.5 text-xs font-semibold text-neutral-600 transition-colors hover:border-[#0F6E5C]/40 hover:text-[#0F6E5C] disabled:opacity-50"
+          >
+            {downloading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.75} />
+            ) : (
+              <Download className="h-3.5 w-3.5" strokeWidth={1.75} />
+            )}
+            {downloading ? "ডাউনলোড হচ্ছে…" : "রিপোর্ট ডাউনলোড"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Scanner modal ─────────────────────────────────────────────────────── */
 
 const CORNER = "absolute w-7 h-7 border-white/90";
 
@@ -173,7 +229,6 @@ function ScannerModal({ visible, onScan, onClose }) {
   const [torch, setTorch] = useState(false);
   const [locked, setLocked] = useState(false);
 
-  // Reset per-open UI state (not the camera itself) whenever it's shown again
   useEffect(() => {
     if (visible) {
       setLocked(false);
@@ -245,9 +300,6 @@ function ScannerModal({ visible, onScan, onClose }) {
                 styles={{ container: { width: "100%", height: "100%" } }}
                 paused={locked || !visible}
                 allowMultiple={false}
-                // yudiel scanner applies this to the live track via
-                // applyConstraints internally rather than re-opening the
-                // stream, so flipping it is cheap.
                 torch={torch}
               />
               <Viewfinder locked={locked} />
@@ -285,23 +337,21 @@ function ScannerModal({ visible, onScan, onClose }) {
   );
 }
 
-// ── Main component ──────────────────────────────────────────────────────
+/* ── Page ──────────────────────────────────────────────────────────────── */
 
 export default function ScanInvoice() {
   const { labId: routeLabId, invoiceId: routeInvoiceId } = useParams();
   const navigate = useNavigate();
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [modalMounted, setModalMounted] = useState(false); // keeps modal (and its camera) alive between opens
+  const [modalMounted, setModalMounted] = useState(false);
+  const [viewingTest, setViewingTest] = useState(null);
+
   const releaseTimer = useRef(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [data, setData] = useState(null);
-
-  // Keyed by testId — lets each row show its own spinner independently.
-  const [downloadingTestId, setDownloadingTestId] = useState(null);
-  const [downloadError, setDownloadError] = useState("");
 
   const openScanner = useCallback(() => {
     if (releaseTimer.current) {
@@ -313,23 +363,15 @@ export default function ScanInvoice() {
     setModalOpen(true);
   }, []);
 
-  // Fires on pointerdown/touchstart — before "click" — so camera
-  // permission/negotiation starts as early as physically possible.
   const warmStart = useCallback(() => openScanner(), [openScanner]);
 
   const closeScanner = useCallback(() => {
     setModalOpen(false);
-    // Keep the camera stream alive briefly in case the user scans again
-    // (e.g. after an invalid code). Fully unmount — and release the
-    // camera — only after it's been idle for a while.
     releaseTimer.current = setTimeout(() => setModalMounted(false), IDLE_RELEASE_MS);
   }, []);
 
   useEffect(() => () => releaseTimer.current && clearTimeout(releaseTimer.current), []);
 
-  // Printed invoice QR codes encode the direct URL /:labId/:invoiceId, so a
-  // phone's native camera app (outside this SPA) lands here instead of going
-  // through the in-app scanner. Run the same lookup automatically on mount.
   useEffect(() => {
     if (routeLabId && routeInvoiceId) {
       lookup(routeLabId, routeInvoiceId);
@@ -337,7 +379,6 @@ export default function ScanInvoice() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeLabId, routeInvoiceId]);
 
-  // ── Lookup ────────────────────────────────────────────────────────────
   async function lookup(labId, invoiceId) {
     setError("");
     if (!HEX24.test(labId)) {
@@ -370,64 +411,15 @@ export default function ScanInvoice() {
     lookup(parsed.labId, parsed.invoiceId);
   }
 
-  // Downloads a single test's report as a PDF, generated client-side from
-  // the same template used on ReportDownload.jsx.
-  async function handleDownloadTest(test) {
-    if (!data) return;
-    const labId = routeLabId || data.labId;
-    const invoiceId = data.invoiceId;
-    const testId = test.testId ?? test._id ?? test.id;
-
-    if (!labId || !testId) {
-      setDownloadError("রিপোর্ট ডাউনলোড করা সম্ভব হয়নি।");
-      return;
-    }
-
-    setDownloadError("");
-    setDownloadingTestId(testId);
-    try {
-      const res = await scanService.getReport(labId, invoiceId, testId);
-      const payload = res.data;
-
-      const patientForPdf = {
-        name: data.patient?.name,
-        age: data.patient?.age != null ? `${data.patient.age} yrs` : "",
-        gender: data.patient?.gender,
-        contactNumber: data.patient?.contactNumber,
-        referredBy: data.referrer?.name ?? "",
-        sampleDate: formatDate(payload.report?.sampleCollectionDate),
-        reportDate: formatDate(payload.report?.reportDate),
-      };
-
-      const blob = await pdf(
-        <ScanReportPDFDocument
-          report={payload.report}
-          reportName={payload.testName}
-          invoiceId={payload.invoiceId}
-          patient={patientForPdf}
-          labInfo={payload.labInfo}
-        />,
-      ).toBlob();
-
-      saveBlob(blob, `${(payload.testName || test.name || "report").replace(/\s+/g, "_")}_report.pdf`);
-    } catch (err) {
-      console.error("Download failed:", err);
-      setDownloadError(err?.response?.data?.error || "রিপোর্ট ডাউনলোড করা সম্ভব হয়নি।");
-    } finally {
-      setDownloadingTestId(null);
-    }
-  }
-
   function reset() {
     setData(null);
     setError("");
-    setDownloadError("");
     if (routeLabId || routeInvoiceId) navigate("/");
   }
 
-  // ── Result view ──────────────────────────────────────────────────────
+  /* ── Result view ───────────────────────────────────────────────────── */
   if (data) {
-    const { patient, payment, tests, counts, referrer, doctor, canDownloadReports } = data;
+    const { patient, payment, tests, counts, doctor, labInfo } = data;
     return (
       <div className="mx-auto flex min-h-[100dvh] max-w-md flex-col bg-[#FAF9F6] font-sans">
         <header className="flex items-center gap-3 border-b border-neutral-200 bg-white px-4 py-3">
@@ -444,7 +436,8 @@ export default function ScanInvoice() {
         </header>
 
         <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
-          {/* Patient card */}
+          <LabLetterhead labInfo={labInfo} />
+
           <section className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
             <div className="mb-1 flex items-center gap-2 text-[#0F6E5C]">
               <User className="h-4 w-4" strokeWidth={1.75} />
@@ -465,17 +458,15 @@ export default function ScanInvoice() {
                   value={`${doctor.name}${doctor.degree ? ` (${doctor.degree})` : ""}`}
                 />
               )}
-              {referrer && <InfoRow icon={UserRound} label="রেফারার" value={referrer.name} />}
             </div>
           </section>
 
-          {/* Payment card */}
           <section className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
             <div className="mb-2 flex items-center gap-2 text-[#0F6E5C]">
               <CreditCard className="h-4 w-4" strokeWidth={1.75} />
               <h2 className="text-sm font-semibold">পেমেন্ট তথ্য</h2>
             </div>
-            <div className="grid grid-cols-2 gap-3 font-mono text-sm">
+            <div className="grid grid-cols-3 gap-3 font-mono text-sm">
               <div className="rounded-lg bg-neutral-50 p-2.5">
                 <div className="text-[11px] uppercase text-neutral-500">মোট</div>
                 <div className="text-neutral-900">৳{payment.final}</div>
@@ -487,10 +478,6 @@ export default function ScanInvoice() {
               <div className={`rounded-lg p-2.5 ${payment.due > 0 ? "bg-red-50" : "bg-[#0F6E5C]/10"}`}>
                 <div className="text-[11px] uppercase text-neutral-500">বকেয়া</div>
                 <div className={payment.due > 0 ? "text-red-600" : "text-[#0F6E5C]"}>৳{payment.due}</div>
-              </div>
-              <div className="rounded-lg bg-neutral-50 p-2.5">
-                <div className="text-[11px] uppercase text-neutral-500">মাধ্যম</div>
-                <div className="text-neutral-900">{payment.paymentMode}</div>
               </div>
             </div>
             <div className="mt-3">
@@ -508,7 +495,6 @@ export default function ScanInvoice() {
             </div>
           </section>
 
-          {/* Tests card — each completed online test has its own download button */}
           <section className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
             <div className="mb-1 flex items-center justify-between">
               <div className="flex items-center gap-2 text-[#0F6E5C]">
@@ -520,38 +506,42 @@ export default function ScanInvoice() {
               </span>
             </div>
             <div>
-              {tests.map((t, i) => {
-                const testId = t.testId ?? t._id ?? t.id;
-                return (
-                  <TestRow
-                    key={testId ?? i}
-                    test={t}
-                    canDownload={!!canDownloadReports}
-                    downloading={downloadingTestId === testId}
-                    onDownload={handleDownloadTest}
-                  />
-                );
-              })}
+              {tests.map((t, i) => (
+                <TestRow
+                  key={t.testId ?? i}
+                  test={{ ...t, labId: data.labId, invoiceId: data.invoiceObjectId }}
+                  onView={(test) => setViewingTest({ testId: test.testId, name: test.name })}
+                />
+              ))}
             </div>
-            {!canDownloadReports && counts.onlineCompletedCount > 0 && (
-              <p className="mt-2 text-[11px] text-neutral-400">
-                {!payment.isFullyPaid ? "সম্পূর্ণ পেমেন্ট না হওয়া পর্যন্ত রিপোর্ট ডাউনলোড করা যাবে না।" : ""}
-              </p>
-            )}
           </section>
 
-          {downloadError && (
+          {error && (
             <div className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2.5 text-xs text-red-600">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
-              {downloadError}
+              {error}
             </div>
+          )}
+
+          <div className="flex justify-center pb-2 pt-1">
+            <BrandMark />
+          </div>
+
+          {viewingTest && (
+            <ReportDrawer
+              labId={data.labId}
+              invoiceId={data.invoiceObjectId}
+              testId={viewingTest.testId}
+              testName={viewingTest.name}
+              onClose={() => setViewingTest(null)}
+            />
           )}
         </div>
       </div>
     );
   }
 
-  // ── Idle view: scan button + modal ──────────────────────────────────
+  /* ── Idle / scan view ──────────────────────────────────────────────── */
   return (
     <div className="mx-auto flex min-h-[100dvh] max-w-md flex-col bg-[#FAF9F6] font-sans">
       <header className="border-b border-neutral-200 bg-white px-4 py-3">
@@ -569,21 +559,25 @@ export default function ScanInvoice() {
             <ScanLine className="h-10 w-10 text-[#0F6E5C]" strokeWidth={1.5} />
           )}
         </div>
+
         <div className="space-y-1">
           <p className="text-sm font-medium text-neutral-800">
             {loading ? "ইনভয়েস যাচাই করা হচ্ছে…" : "ইনভয়েসের QR কোড স্ক্যান করুন"}
           </p>
           {!loading && <p className="text-xs text-neutral-500">ক্যামেরা চালু করতে নিচের বাটনে চাপুন</p>}
         </div>
+
         <button
           onPointerDown={warmStart}
           onClick={openScanner}
           disabled={loading}
-          className="flex w-full max-w-xs items-center justify-center gap-2 rounded-lg bg-[#0F6E5C] py-3 text-sm font-semibold text-white transition hover:bg-[#0c5a4a] disabled:opacity-60"
+          className="flex w-full max-w-xs items-center justify-center gap-2 rounded-lg bg-[#0F6E5C] py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0c5a4a] active:scale-[0.99] disabled:opacity-60"
         >
           <ScanLine className="h-4 w-4" strokeWidth={2} />
           স্ক্যান শুরু করুন
         </button>
+
+        <BrandMark />
       </div>
 
       {error && (
