@@ -33,7 +33,6 @@ import {
 } from "lucide-react";
 
 const HEX24 = /^[a-fA-F0-9]{24}$/;
-const IDLE_RELEASE_MS = 20_000;
 const SCAN_CONSTRAINTS = {
   facingMode: "environment",
   width: { ideal: 480 },
@@ -246,13 +245,21 @@ function ScannerModal({ visible, onScan, onClose }) {
   const [torch, setTorch] = useState(false);
   const [locked, setLocked] = useState(false);
 
+  // Lock body scroll when modal opens
   useEffect(() => {
     if (visible) {
+      document.body.style.overflow = "hidden";
       setLocked(false);
       setError(null);
     } else {
+      document.body.style.overflow = "unset";
       setTorch(false);
     }
+
+    // Cleanup on unmount
+    return () => {
+      document.body.style.overflow = "unset";
+    };
   }, [visible]);
 
   const handleResult = (results) => {
@@ -366,10 +373,10 @@ export default function ScanInvoice() {
     setModalOpen(true);
   }, []);
 
-  const warmStart = useCallback(() => openScanner(), [openScanner]);
   const closeScanner = useCallback(() => {
     setModalOpen(false);
-    releaseTimer.current = setTimeout(() => setModalMounted(false), IDLE_RELEASE_MS);
+    // Give exactly 300ms for CSS fade out animation, then immediately kill camera feed
+    releaseTimer.current = setTimeout(() => setModalMounted(false), 300);
   }, []);
 
   useEffect(() => () => releaseTimer.current && clearTimeout(releaseTimer.current), []);
@@ -555,8 +562,8 @@ export default function ScanInvoice() {
 
   /* ── Idle / Scan View ───────────────────────────────────────────────── */
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="max-w-md mx-auto px-6 py-12 flex flex-col items-center justify-center min-h-screen text-center">
+    <div className="min-h-[100dvh] w-full bg-slate-50 flex flex-col items-center justify-center overflow-hidden relative">
+      <div className="max-w-md w-full px-6 flex flex-col items-center justify-center text-center">
         <div className="relative mb-10">
           <div className="absolute inset-0 bg-indigo-300/40 rounded-full blur-3xl animate-pulse"></div>
           <div className="relative h-32 w-32 rounded-3xl bg-white shadow-xl shadow-indigo-900/5 border border-slate-100 flex items-center justify-center rotate-3 transition-transform hover:rotate-0">
@@ -576,7 +583,6 @@ export default function ScanInvoice() {
             : "আপনার ইনভয়েসে থাকা QR কোডটি স্ক্যান করে অনলাইনেই অরিজিনাল রিপোর্ট সংগ্রহ করুন।"}
         </p>
         <button
-          onPointerDown={warmStart}
           onClick={openScanner}
           disabled={loading}
           className="w-full max-w-[280px] h-14 rounded-2xl bg-indigo-600 text-white font-bold text-lg shadow-lg shadow-indigo-600/30 hover:bg-indigo-700 hover:shadow-indigo-600/40 transition-all transform hover:-translate-y-0.5 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
