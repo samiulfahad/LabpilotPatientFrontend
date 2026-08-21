@@ -29,7 +29,6 @@ import {
   ShieldCheck,
   Building2,
   Mail,
-  FileText,
   Activity,
 } from "lucide-react";
 
@@ -269,7 +268,7 @@ function ScannerModal({ visible, onScan, onClose }) {
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-md transition-all duration-200 ${
+      className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md transition-all duration-200 ${
         visible ? "opacity-100" : "pointer-events-none opacity-0"
       }`}
     >
@@ -277,7 +276,7 @@ function ScannerModal({ visible, onScan, onClose }) {
         @keyframes scanline { 0%,100% { top: 8%; opacity: .4; } 50% { top: 88%; opacity: 1; } }
       `}</style>
       <div
-        className="relative w-full max-w-md bg-black rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl"
+        className="relative w-full max-w-md bg-black rounded-3xl overflow-hidden shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-5 py-4 bg-gradient-to-b from-black/70 to-transparent">
@@ -305,12 +304,14 @@ function ScannerModal({ visible, onScan, onClose }) {
                   setError(err?.name === "NotAllowedError" ? "ক্যামেরার অনুমতি প্রয়োজন।" : "ক্যামেরা চালু করা যায়নি।")
                 }
                 formats={["qr_code"]}
-                constraints={SCAN_CONSTRAINTS}
+                constraints={{
+                  ...SCAN_CONSTRAINTS,
+                  ...(torch ? { advanced: [{ torch: true }] } : {}),
+                }}
                 components={{ finder: false, torch: false, zoom: false }}
                 styles={{ container: { width: "100%", height: "100%" } }}
                 paused={locked || !visible}
                 allowMultiple={false}
-                torch={torch}
               />
               <Viewfinder locked={locked} />
             </>
