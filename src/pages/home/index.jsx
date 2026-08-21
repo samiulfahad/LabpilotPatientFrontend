@@ -19,7 +19,7 @@ import { createPortal } from "react-dom";
 import { Scanner } from "@yudiel/react-qr-scanner";
 import { pdf } from "@react-pdf/renderer";
 import scanService from "../../api/scan";
-import { ScanReportPDFDocument } from "../reportDownload/ScanReportPDF";
+import { ScanReportPDFDocument } from "./ScanReportPDF";
 import {
   ScanLine,
   X,
@@ -35,6 +35,7 @@ import {
   WifiOff,
   Clock,
   Download,
+  Loader2 as DownloadSpinner,
   CreditCard,
   ArrowLeft,
   AlertTriangle,
@@ -62,6 +63,18 @@ const formatDate = (val) => {
   return isNaN(d) ? "" : d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 };
 
+// Triggers a real file download for a blob via a synthetic <a> click.
+function saveBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 // ── Small presentational bits ───────────────────────────────────────────
 
 function InfoRow({ icon: Icon, label, value }) {
@@ -77,7 +90,11 @@ function InfoRow({ icon: Icon, label, value }) {
   );
 }
 
-function TestRow({ test }) {
+// Per-test row: online+completed tests get their own download button.
+function TestRow({ test, canDownload, downloading, onDownload }) {
+  const testId = test.testId ?? test._id ?? test.id;
+  const showDownload = test.isOnline && test.isCompleted;
+
   return (
     <div className="flex items-center justify-between gap-3 border-b border-dashed border-neutral-200 py-2.5 last:border-none">
       <div className="flex min-w-0 items-center gap-2.5">
@@ -101,6 +118,25 @@ function TestRow({ test }) {
               প্রক্রিয়াধীন
             </span>
           ))}
+
+        {showDownload && (
+          <button
+            onClick={canDownload && testId ? () => onDownload(test) : undefined}
+            disabled={!canDownload || !testId || downloading}
+            title={!canDownload ? "সম্পূর্ণ পেমেন্ট প্রয়োজন" : !testId ? "টেস্ট আইডি পাওয়া যায়নি" : undefined}
+            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors ${
+              canDownload && testId
+                ? "bg-[#0F6E5C]/10 text-[#0F6E5C] hover:bg-[#0F6E5C]/20"
+                : "bg-neutral-100 text-neutral-300 cursor-not-allowed"
+            }`}
+          >
+            {downloading ? (
+              <DownloadSpinner className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
+            ) : (
+              <Download className="h-3.5 w-3.5" strokeWidth={2} />
+            )}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -251,7 +287,7 @@ function ScannerModal({ visible, onScan, onClose }) {
 
 // ── Main component ──────────────────────────────────────────────────────
 
-export default function ScanInvoice({ onDownloadReports }) {
+export default function ScanInvoice() {
   const { labId: routeLabId, invoiceId: routeInvoiceId } = useParams();
   const navigate = useNavigate();
 
@@ -260,9 +296,12 @@ export default function ScanInvoice({ onDownloadReports }) {
   const releaseTimer = useRef(null);
 
   const [loading, setLoading] = useState(false);
-  const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState("");
   const [data, setData] = useState(null);
+
+  // Keyed by testId — lets each row show its own spinner independently.
+  const [downloadingTestId, setDownloadingTestId] = useState(null);
+  const [downloadError, setDownloadError] = useState("");
 
   const openScanner = useCallback(() => {
     if (releaseTimer.current) {
@@ -331,37 +370,24 @@ export default function ScanInvoice({ onDownloadReports }) {
     lookup(parsed.labId, parsed.invoiceId);
   }
 
-  // Triggers a real file download for a single blob (no popup blocker issues
-  // since it's not window.open, just a synthetic <a> click).
-  function saveBlob(blob, filename) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }
-
-  async function handleDownload() {
+  // Downloads a single test's report as a PDF, generated client-side from
+  // the same template used on ReportDownload.jsx.
+  async function handleDownloadTest(test) {
     if (!data) return;
-    setDownloading(true);
-    setError("");
+    const labId = routeLabId || data.labId;
+    const invoiceId = data.invoiceId;
+    const testId = test.testId ?? test._id ?? test.id;
+
+    if (!labId || !testId) {
+      setDownloadError("রিপোর্ট ডাউনলোড করা সম্ভব হয়নি।");
+      return;
+    }
+
+    setDownloadError("");
+    setDownloadingTestId(testId);
     try {
-      if (onDownloadReports) {
-        await onDownloadReports(data);
-        return;
-      }
-
-      const labId = routeLabId || data.labId;
-      const invoiceId = data.invoiceId;
-      const readyTests = (data.tests || []).filter((t) => t.isOnline && t.isCompleted);
-
-      if (!labId || !readyTests.length) {
-        setError("ডাউনলোডের জন্য কোনো প্রস্তুত রিপোর্ট নেই।");
-        return;
-      }
+      const res = await scanService.getReport(labId, invoiceId, testId);
+      const payload = res.data;
 
       const patientForPdf = {
         name: data.patient?.name,
@@ -369,47 +395,33 @@ export default function ScanInvoice({ onDownloadReports }) {
         gender: data.patient?.gender,
         contactNumber: data.patient?.contactNumber,
         referredBy: data.referrer?.name ?? "",
+        sampleDate: formatDate(payload.report?.sampleCollectionDate),
+        reportDate: formatDate(payload.report?.reportDate),
       };
 
-      // Sequential, not Promise.all: most browsers block multiple
-      // near-simultaneous synthetic-click downloads as popups.
-      for (const test of readyTests) {
-        const testId = test.testId ?? test._id ?? test.id;
-        if (!testId) continue;
+      const blob = await pdf(
+        <ScanReportPDFDocument
+          report={payload.report}
+          reportName={payload.testName}
+          invoiceId={payload.invoiceId}
+          patient={patientForPdf}
+          labInfo={payload.labInfo}
+        />,
+      ).toBlob();
 
-        const res = await scanService.getReport(labId, invoiceId, testId);
-        const payload = res.data;
-
-        const blob = await pdf(
-          <ScanReportPDFDocument
-            report={payload.report}
-            reportName={payload.testName}
-            invoiceId={payload.invoiceId}
-            patient={{
-              ...patientForPdf,
-              sampleDate: formatDate(payload.report?.sampleCollectionDate),
-              reportDate: formatDate(payload.report?.reportDate),
-            }}
-            labInfo={payload.labInfo}
-          />,
-        ).toBlob();
-
-        saveBlob(blob, `${(payload.testName || test.name || "report").replace(/\s+/g, "_")}_report.pdf`);
-
-        // Small gap between downloads keeps some browsers from silently
-        // dropping the second/third triggered file save.
-        await new Promise((r) => setTimeout(r, 400));
-      }
+      saveBlob(blob, `${(payload.testName || test.name || "report").replace(/\s+/g, "_")}_report.pdf`);
     } catch (err) {
-      setError(err?.response?.data?.error || "রিপোর্ট ডাউনলোড করা সম্ভব হয়নি।");
+      console.error("Download failed:", err);
+      setDownloadError(err?.response?.data?.error || "রিপোর্ট ডাউনলোড করা সম্ভব হয়নি।");
     } finally {
-      setDownloading(false);
+      setDownloadingTestId(null);
     }
   }
 
   function reset() {
     setData(null);
     setError("");
+    setDownloadError("");
     if (routeLabId || routeInvoiceId) navigate("/");
   }
 
@@ -496,7 +508,7 @@ export default function ScanInvoice({ onDownloadReports }) {
             </div>
           </section>
 
-          {/* Tests card */}
+          {/* Tests card — each completed online test has its own download button */}
           <section className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
             <div className="mb-1 flex items-center justify-between">
               <div className="flex items-center gap-2 text-[#0F6E5C]">
@@ -508,46 +520,33 @@ export default function ScanInvoice({ onDownloadReports }) {
               </span>
             </div>
             <div>
-              {tests.map((t, i) => (
-                <TestRow key={i} test={t} />
-              ))}
+              {tests.map((t, i) => {
+                const testId = t.testId ?? t._id ?? t.id;
+                return (
+                  <TestRow
+                    key={testId ?? i}
+                    test={t}
+                    canDownload={!!canDownloadReports}
+                    downloading={downloadingTestId === testId}
+                    onDownload={handleDownloadTest}
+                  />
+                );
+              })}
             </div>
+            {!canDownloadReports && counts.onlineCompletedCount > 0 && (
+              <p className="mt-2 text-[11px] text-neutral-400">
+                {!payment.isFullyPaid ? "সম্পূর্ণ পেমেন্ট না হওয়া পর্যন্ত রিপোর্ট ডাউনলোড করা যাবে না।" : ""}
+              </p>
+            )}
           </section>
-        </div>
 
-        {/* Download action */}
-        <div className="border-t border-neutral-200 bg-white p-4">
-          {canDownloadReports ? (
-            <button
-              onClick={handleDownload}
-              disabled={downloading}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#0F6E5C] py-3 text-sm font-semibold text-white transition hover:bg-[#0c5a4a] disabled:opacity-60"
-            >
-              {downloading ? (
-                <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
-              ) : (
-                <Download className="h-4 w-4" strokeWidth={2} />
-              )}
-              রিপোর্ট ডাউনলোড করুন
-            </button>
-          ) : (
-            <div className="flex items-center gap-2 rounded-lg bg-neutral-100 px-3 py-3 text-xs text-neutral-500">
-              <AlertTriangle className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-              {!payment.isFullyPaid
-                ? "সম্পূর্ণ পেমেন্ট না হওয়া পর্যন্ত রিপোর্ট ডাউনলোড করা যাবে না।"
-                : counts.onlineCount === 0
-                  ? "এই ইনভয়েসে কোনো অনলাইন রিপোর্ট নেই।"
-                  : "সব রিপোর্ট এখনও প্রস্তুত হয়নি।"}
+          {downloadError && (
+            <div className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2.5 text-xs text-red-600">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+              {downloadError}
             </div>
           )}
         </div>
-
-        {error && (
-          <div className="mx-4 mb-4 flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2.5 text-xs text-red-600">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
-            {error}
-          </div>
-        )}
       </div>
     );
   }
