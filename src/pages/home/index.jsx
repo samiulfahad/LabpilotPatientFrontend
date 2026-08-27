@@ -54,10 +54,10 @@ function formatDate(value) {
 function InfoItem({ icon: Icon, label, value }) {
   if (!value) return null;
   return (
-    <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-slate-50/50 border border-slate-100">
-      <div className="flex items-center gap-1.5 text-slate-500">
-        <Icon className="h-3.5 w-3.5" strokeWidth={2} />
-        <span className="text-[11px] uppercase tracking-wider font-semibold">{label}</span>
+    <div className="min-w-0 flex flex-col gap-1.5 p-3 rounded-xl bg-slate-50/50 border border-slate-100">
+      <div className="flex items-center gap-1.5 text-slate-500 min-w-0">
+        <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+        <span className="text-[11px] uppercase tracking-wider font-semibold truncate">{label}</span>
       </div>
       <div className="text-[13px] text-slate-800 font-bold leading-snug truncate" title={value}>
         {value}
@@ -82,16 +82,16 @@ function LabHeader({ labInfo }) {
       <div className="absolute -top-12 -right-12 w-32 h-32 bg-indigo-50 rounded-full blur-3xl opacity-60 pointer-events-none"></div>
 
       <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-start gap-4">
+        <div className="flex items-start gap-4 min-w-0">
           <div className="h-14 w-14 shrink-0 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center">
             <Building2 className="h-7 w-7 text-indigo-600" strokeWidth={1.5} />
           </div>
-          <div>
-            <h2 className="text-xl font-bold text-slate-900 tracking-tight">{labInfo.name}</h2>
-            {labInfo.tagline && <p className="text-sm text-slate-500 font-medium mt-0.5">{labInfo.tagline}</p>}
+          <div className="min-w-0">
+            <h2 className="text-xl font-bold text-slate-900 tracking-tight truncate">{labInfo.name}</h2>
+            {labInfo.tagline && <p className="text-sm text-slate-500 font-medium mt-0.5 truncate">{labInfo.tagline}</p>}
           </div>
         </div>
-        <div className="hidden md:flex">
+        <div className="hidden md:flex shrink-0">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 border border-emerald-100">
             <ShieldCheck className="h-4 w-4" /> যাচাইকৃত ল্যাব
           </span>
@@ -101,21 +101,23 @@ function LabHeader({ labInfo }) {
       {(labInfo.address || labInfo.phone || labInfo.email || labInfo.regNo) && (
         <div className="mt-6 pt-5 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-y-3 gap-x-4 text-[12px] text-slate-600">
           {labInfo.address && (
-            <div className="flex items-start gap-2 lg:col-span-2">
+            <div className="flex items-start gap-2 lg:col-span-2 min-w-0">
               <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400 mt-0.5" />
-              <span className="leading-relaxed">{labInfo.address}</span>
+              <span className="leading-relaxed break-words">{labInfo.address}</span>
             </div>
           )}
           {labInfo.phone && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               <Phone className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-              <span>{labInfo.phone}</span>
+              <span className="truncate">{labInfo.phone}</span>
             </div>
           )}
           {labInfo.email && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               <Mail className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-              <span>{labInfo.email}</span>
+              <span className="truncate" title={labInfo.email}>
+                {labInfo.email}
+              </span>
             </div>
           )}
         </div>
@@ -171,14 +173,14 @@ function TestItem({ test, isFullyPaid, onView }) {
 
   return (
     <div className="group bg-white border border-slate-200 rounded-xl p-4 transition-all hover:shadow-md hover:border-indigo-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-      <div className="flex items-start gap-3.5">
+      <div className="flex items-start gap-3.5 min-w-0">
         <div
-          className={`mt-0.5 p-2 rounded-lg ${test.isOnline ? (test.isCompleted ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-500") : "bg-slate-50 text-slate-400"}`}
+          className={`mt-0.5 p-2 rounded-lg shrink-0 ${test.isOnline ? (test.isCompleted ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-500") : "bg-slate-50 text-slate-400"}`}
         >
           <FlaskConical className="h-5 w-5" strokeWidth={2} />
         </div>
-        <div>
-          <div className="text-sm font-bold text-slate-800 leading-tight mb-1">{test.name}</div>
+        <div className="min-w-0">
+          <div className="text-sm font-bold text-slate-800 leading-tight mb-1 truncate">{test.name}</div>
           <div className="flex items-center gap-2">
             {test.isOnline ? (
               test.isCompleted ? (
@@ -459,11 +461,11 @@ export default function ScanInvoice() {
             >
               <X className="h-6 w-6" strokeWidth={2.5} />
             </button>
-            <div className="text-center">
-              <div className="text-sm font-bold text-slate-900 tracking-tight">যাচাইকৃত রিপোর্ট</div>
-              <div className="text-[11px] text-slate-500 font-mono tracking-wider">INV: {data.invoiceId}</div>
+            <div className="text-center min-w-0 px-2">
+              <div className="text-sm font-bold text-slate-900 tracking-tight truncate">যাচাইকৃত রিপোর্ট</div>
+              <div className="text-[11px] text-slate-500 font-mono tracking-wider truncate">INV: {data.invoiceId}</div>
             </div>
-            <div className="w-10"></div>
+            <div className="w-10 shrink-0"></div>
           </div>
         </header>
 
@@ -524,11 +526,11 @@ export default function ScanInvoice() {
           </div>
 
           <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/60 flex flex-col md:flex-row justify-between items-center gap-6">
-            <div className="flex items-center gap-3 w-full md:w-auto">
-              <div className={`p-3 rounded-xl ${payment.due > 0 ? "bg-amber-50" : "bg-emerald-50"}`}>
+            <div className="flex items-center gap-3 w-full md:w-auto min-w-0">
+              <div className={`p-3 rounded-xl shrink-0 ${payment.due > 0 ? "bg-amber-50" : "bg-emerald-50"}`}>
                 <CreditCard className={`h-6 w-6 ${payment.due > 0 ? "text-amber-600" : "text-emerald-600"}`} />
               </div>
-              <div>
+              <div className="min-w-0">
                 <h3 className="text-[15px] font-bold text-slate-800">পেমেন্ট স্ট্যাটাস</h3>
                 <div
                   className={`text-sm font-semibold mt-0.5 ${payment.due > 0 ? "text-amber-600" : "text-emerald-600"}`}
