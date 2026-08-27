@@ -143,7 +143,7 @@ function TestItem({ test, isFullyPaid, onView }) {
         age: data.patient?.age != null ? `${data.patient.age} yrs` : "",
         gender: data.patient?.gender ?? "",
         contact: data.patient?.contactNumber ?? "",
-        referredBy: data.referrer?.name ?? "",
+        referredBy: data.doctor?.name ?? "",
         sampleDate: formatDate(data.report?.sampleCollectionDate),
         reportDate: formatDate(data.report?.reportDate),
       };
@@ -490,7 +490,7 @@ export default function ScanInvoice() {
               {doctor && (
                 <InfoItem
                   icon={Stethoscope}
-                  label="রেফার্ড বাই"
+                  label="ডাক্তার"
                   value={`${doctor.name}${doctor.degree ? ` (${doctor.degree})` : ""}`}
                 />
               )}
