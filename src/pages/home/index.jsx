@@ -599,7 +599,7 @@ export default function ScanInvoice() {
           </div>
         </div>
         <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mb-3 tracking-tight">
-          {loading ? "যাচাই করা হচ্ছে..." : "রিপোর্ট স্ক্যান করুন"}
+          {loading ? "যাচাই করা হচ্ছে..." : "QR Code স্ক্যান করুন"}
         </h1>
         <p className="text-slate-500 mb-10 max-w-sm text-[15px] leading-relaxed">
           {loading
