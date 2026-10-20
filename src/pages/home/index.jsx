@@ -32,6 +32,10 @@ import {
 } from "lucide-react";
 
 const HEX24 = /^[a-fA-F0-9]{24}$/;
+const IDLE_RELEASE_MS = 20_000; // keep camera warm after closing, like ScanButton
+
+// Stable module-level constant. Never spread/rebuild this per render,
+// otherwise the Scanner restarts the camera.
 const SCAN_CONSTRAINTS = {
   facingMode: "environment",
   width: { ideal: 480 },
@@ -260,20 +264,29 @@ function ScannerModal({ visible, onScan, onClose }) {
   const [error, setError] = useState(null);
   const [torch, setTorch] = useState(false);
   const [locked, setLocked] = useState(false);
+  const wrapRef = useRef(null);
 
+  // Reset per-open UI state only (not the camera itself)
   useEffect(() => {
     if (visible) {
-      document.body.style.overflow = "hidden";
       setLocked(false);
       setError(null);
     } else {
-      document.body.style.overflow = "unset";
       setTorch(false);
     }
-    return () => {
-      document.body.style.overflow = "unset";
-    };
   }, [visible]);
+
+  // Torch goes on the live track, never into constraints
+  useEffect(() => {
+    const track = wrapRef.current?.querySelector("video")?.srcObject?.getVideoTracks?.()[0];
+    if (!track?.getCapabilities?.().torch) return;
+    track.applyConstraints({ advanced: [{ torch }] }).catch(() => {});
+  }, [torch]);
+
+  // Stable callback so the Scanner never sees new props
+  const handleError = useCallback((err) => {
+    setError(err?.name === "NotAllowedError" ? "ক্যামেরার অনুমতি প্রয়োজন।" : "ক্যামেরা চালু করা যায়নি।");
+  }, []);
 
   const handleResult = (results) => {
     if (locked || !results?.length) return;
@@ -284,21 +297,16 @@ function ScannerModal({ visible, onScan, onClose }) {
     }, 260);
   };
 
-  const toggleTorch = () => setTorch((t) => !t);
-
   return createPortal(
     <div
-      className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md transition-all duration-200 ${
+      className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md transition-opacity duration-150 ${
         visible ? "opacity-100" : "pointer-events-none opacity-0"
       }`}
     >
       <style>{`
         @keyframes scanline { 0%,100% { top: 8%; opacity: .4; } 50% { top: 88%; opacity: 1; } }
       `}</style>
-      <div
-        className="relative w-full max-w-md bg-black rounded-3xl overflow-hidden shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="relative w-full max-w-md bg-black rounded-3xl overflow-hidden shadow-2xl">
         <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-5 py-4 bg-gradient-to-b from-black/70 to-transparent">
           <div className="flex items-center gap-2 text-white">
             <ScanLine className="h-5 w-5 text-indigo-300" />
@@ -311,7 +319,8 @@ function ScannerModal({ visible, onScan, onClose }) {
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="relative aspect-square bg-black">
+
+        <div ref={wrapRef} className="relative aspect-square bg-black">
           {error ? (
             <div className="absolute inset-0 flex items-center justify-center text-center px-8">
               <p className="text-rose-300 text-sm font-medium">{error}</p>
@@ -320,14 +329,9 @@ function ScannerModal({ visible, onScan, onClose }) {
             <>
               <Scanner
                 onScan={handleResult}
-                onError={(err) =>
-                  setError(err?.name === "NotAllowedError" ? "ক্যামেরার অনুমতি প্রয়োজন।" : "ক্যামেরা চালু করা যায়নি।")
-                }
+                onError={handleError}
                 formats={["qr_code"]}
-                constraints={{
-                  ...SCAN_CONSTRAINTS,
-                  ...(torch ? { advanced: [{ torch: true }] } : {}),
-                }}
+                constraints={SCAN_CONSTRAINTS}
                 components={{ finder: false, torch: false, zoom: false }}
                 styles={{ container: { width: "100%", height: "100%" } }}
                 paused={locked || !visible}
@@ -337,11 +341,12 @@ function ScannerModal({ visible, onScan, onClose }) {
             </>
           )}
         </div>
+
         <div className="absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-black/80 to-transparent px-5 pb-6 pt-10">
           <p className="text-center text-[12px] text-white/60 mb-3">QR কোডটি ফ্রেমের মধ্যে রাখুন</p>
           <div className="flex items-center gap-3">
             <button
-              onClick={toggleTorch}
+              onClick={() => setTorch((t) => !t)}
               className={`flex-1 py-3 rounded-2xl text-sm font-bold backdrop-blur transition-all ${torch ? "bg-amber-400 text-black" : "bg-white/10 text-white hover:bg-white/20"}`}
             >
               {torch ? <ZapOff className="inline h-4 w-4 mr-1" /> : <Zap className="inline h-4 w-4 mr-1" />}
@@ -388,8 +393,13 @@ export default function ScanInvoice() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, [data]);
 
+  // Same open/close logic as ScanButton: the modal (and camera) stays warm
+  // for IDLE_RELEASE_MS after closing, then unmounts and releases the camera.
   const openScanner = useCallback(() => {
-    if (releaseTimer.current) clearTimeout(releaseTimer.current);
+    if (releaseTimer.current) {
+      clearTimeout(releaseTimer.current);
+      releaseTimer.current = null;
+    }
     setError("");
     setModalMounted(true);
     setModalOpen(true);
@@ -397,7 +407,8 @@ export default function ScanInvoice() {
 
   const closeScanner = useCallback(() => {
     setModalOpen(false);
-    releaseTimer.current = setTimeout(() => setModalMounted(false), 300);
+    clearTimeout(releaseTimer.current);
+    releaseTimer.current = setTimeout(() => setModalMounted(false), IDLE_RELEASE_MS);
   }, []);
 
   useEffect(() => () => releaseTimer.current && clearTimeout(releaseTimer.current), []);
@@ -607,11 +618,13 @@ export default function ScanInvoice() {
             : "আপনার ইনভয়েসে থাকা QR কোডটি স্ক্যান করে অনলাইনেই অরিজিনাল রিপোর্ট সংগ্রহ করুন।"}
         </p>
         <button
+          type="button"
+          onPointerDown={openScanner}
           onClick={openScanner}
           disabled={loading}
           className="w-full max-w-[280px] h-14 rounded-2xl bg-indigo-600 text-white font-bold text-lg shadow-lg shadow-indigo-600/30 hover:bg-indigo-700 hover:shadow-indigo-600/40 transition-all transform hover:-translate-y-0.5 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
         >
-          <ScanLine className="h-5 w-5" /> স্ক্যান শুরু করুন
+          <ScanLine className="h-5 w-5" /> স্ক্যান করুন
         </button>
         <div className="mt-16">
           <BrandMark />
